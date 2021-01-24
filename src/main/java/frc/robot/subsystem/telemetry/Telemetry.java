@@ -18,148 +18,102 @@ import com.ctre.phoenix.motorcontrol.ControlMode;
 import com.ctre.phoenix.motorcontrol.can.TalonSRX;
 
 
-public class Telemetry extends SubsystemBase{
-    
-    private LidarPWM frontLidar, rearLidar;
-    private double frontLidarDistance, rearLidarDistance;
-    private double frontLidarOffset = 0;
-    private double rearLidarOffset = 0;
-
+public class Telemetry extends SubsystemBase{ 
+    //private LidarPWM frontLidar, rearLidar, buttLidar;
+    private TalonSRX testMotor;
     private static Logger logger = Logger.getLogger(Telemetry.class.getName());
 
-    private double betweenLidarDistance = 0;
-    private double lidarTolerance = 5;
-    private double correction = Math.PI/180;
-    private MedianFilter filterFront;
-    private MedianFilter filterRear;
+    //distance between side sensors
+    private double betweenDistance;
+    private double tolerance = 5;
+    private Position target;
+    private Position position;
 
-    public Telemetry() {
-
-
+    public Telemetry(Position robotPosition, Position targetPosition) {
+        position = robotPosition;
+        target = targetPosition;
     }
-    
+
     public void init(PortMan portMan) throws Exception{
         logger.entering(Telemetry.class.getName(), "init()");
-
-        //frontLidar = new LidarPWM(portMan.acquirePort(PortMan.digital0_label, "Telemetry.frontLidar"));
-        //rearLidar = new LidarPWM(portMan.acquirePort(PortMan.digital1_label, "Telemetry.rearLidar"));
-        filterFront = new MedianFilter(10);
-        filterRear = new MedianFilter(10);
+        
+        testMotor = new TalonSRX(portMan.acquirePort(PortMan.can_18_label, "Telemetry.testMotor"));
 
         CameraServer.getInstance().startAutomaticCapture();
-        //CameraServer.getInstance().startAutomaticCapture();
 
         logger.exiting(Telemetry.class.getName(), "init()");
     }
 
-    public boolean isSquare(double tolerance){
-        if (Math.abs(getFrontLidarDistance() - getRearLidarDistance()) <= tolerance)
-            return true;
-        else
-            return false;
-    }
-    
-    /*
-    //breaks lidar on shuffleboard
-    public boolean isSquare(double targetDistance)
-    {
-        frontLidarDistance = frontLidar.getDistance();
-        rearLidarDistance = rearLidar.getDistance();
-
-        if (Math.abs(frontLidarDistance-targetDistance) > lidarTolerance || Math.abs(rearLidarDistance-targetDistance) > lidarTolerance || Math.abs(frontLidarDistance-rearLidarDistance) > lidarTolerance)
-        {
-            double angleError = Math.atan((Math.max(frontLidarDistance, rearLidarDistance)-Math.min(frontLidarDistance, rearLidarDistance))/betweenLidarDistance);
-
-            if (frontLidarDistance*Math.cos(angleError)-targetDistance > rearLidarDistance*Math.cos(angleError)-targetDistance)
-            {
-                if (frontLidarDistance < rearLidarDistance)
-                {
-                    //move front wheels right angleError, turn right
-                }
-                else
-                {
-                    //move front wheels left angleError, turn left
-                }
-            }
-            else
-            {
-                if (frontLidarDistance < rearLidarDistance)
-                {
-                    //move back wheels left angleError, turn right
-                }
-                else
-                {
-                    //move back wheels right angleError, turn left
-                }
-            }
-
-            while(Math.abs(frontLidarDistance-rearLidarDistance) > lidarTolerance)
-            {
-                if (frontLidarDistance*Math.cos(angleError)-targetDistance > rearLidarDistance*Math.cos(angleError)-targetDistance)
-                {
-                    if (frontLidarDistance < rearLidarDistance)
-                    {
-                        //move front wheels right correction, turn right
-                    }
-                    else
-                    {
-                        //move front wheels left correction, turn left
-                    }
-                
-                }
-                else
-                {
-                    if (frontLidarDistance < rearLidarDistance)
-                    {
-                        //move back wheels left correction, turn right
-                    }
-                    else
-                    {
-                        //move back wheels right correction, turn left
-                    }
-                }
-            }
-            
-            double distanceError = Math.abs(frontLidarDistance - targetDistance);
-
-            if (distanceError > lidarTolerance)
-            {
-                if (frontLidarDistance > targetDistance)
-                {
-                    //move left distanceError
-                }
-                else
-                {
-                    //move right distanceError
-                }
-            }
-        }
+    public boolean isSquare(){
+        if (Math.abs(position.getx1()-position.getx2()) > tolerance)
+            squareUp();
         return true;
     }
-    */
+    
+    public void squareUp(){
+        if (!isSquare()){
+            double errorDistance = Math.abs(position.getx1()-position.getx2());
+            double angleError = Math.atan(distanceError/betweenDistance);
 
-    public double getFrontLidarDistance(){
-        return filterFront.calculate(frontLidar.getDistance() - 10);
+            double distanceToMove = angleError*betweenLidarDistance;
+
+            if (position.getx1() < position.getx2()){
+                //move front wheels right distanceToMove
+            } else{
+                //move front wheels left distanceToMove
+            }
+
+            position.updatePosition(); 
+        }
+
+        while(!isSquare()){
+            if (position.getx1() < position.getx2()){
+                //move back wheels left correction, turn right
+            } else{
+                //move back wheels right correction, turn left
+            }
+            
+            position.updatePosition();
+        }     
     }
 
-    public double getRearLidarDistance(){
-        return filterRear.calculate(rearLidar.getDistance());
+    public void moveHorizontal(){
+        double distanceError = Math.abs(position.getx1() - target.getx1());
+
+        if (distanceError > tolerance){
+            if (position.getx1() > target.getx1()){
+                //move left distanceError
+            } else{
+                //move right distanceError
+            }
+        }
     }
 
-    public boolean isSquare()
-    {
-        return isSquare(100);
+    public void moveVertical(){
+        double distanceError = Math.abs(position.gety() - target.gety());
+
+        if (distanceError > tolerance){
+            if (position.gety() < target.gety()){
+                //move forward distanceError
+            } else{
+                //move back distanceError
+            }
+        }
     }
     
     public double getTolerance(){
-        return lidarTolerance;
+        return tolerance;
     }
 
     public void setTolerance(double tol){
-        lidarTolerance = tol;
+        tolerance = tol;
     }
 
-    public double getBetweenLidar(){
-        return betweenLidarDistance;
+    public double getBetween(){
+        return betweenDistance;
+    }
+
+    public void testMotor(double po){
+        testMotor.set(ControlMode.PercentOutput, po);
     }
 }
